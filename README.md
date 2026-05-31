@@ -1,3 +1,4 @@
+
 # microbit-agent
 
 Human-in-the-loop help desk for kids working on BBC micro:bit projects.
@@ -15,7 +16,9 @@ Teacher reviews → edits → approves / redirects
         ↓
 Student's browser shows the approved hint
 ```
-
+<img width="784" height="780" alt="Screenshot 2026-05-31 162428" src="https://github.com/user-attachments/assets/21f98898-8574-4d10-9dc6-00da3256b07d" />
+<img width="1556" height="632" alt="Screenshot 2026-05-31 162523" src="https://github.com/user-attachments/assets/24c6fcd2-53fb-46c5-b453-68419bcc0585" />
+<img width="899" height="481" alt="Screenshot 2026-05-31 162622" src="https://github.com/user-attachments/assets/a92c939f-e277-4c38-a538-d22f96106555" />
 ## URLs
 
 | URL | Who uses it |
