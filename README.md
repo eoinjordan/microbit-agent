@@ -5,6 +5,20 @@ Human-in-the-loop help desk for kids working on BBC micro:bit projects.
 
 Kids paste their MicroPython or JavaScript/MakeCode-style code and ask a question. An LLM (local Ollama by default, or Anthropic) generates a kid-friendly hint. The teacher reviews and approves the hint before the student sees it (or auto-approve can be enabled for faster testing).
 
+## Aim
+
+This project is for classrooms where students need timely coding help, but should not be pushed into blindly pasting code into ChatGPT and copying the answer back into their project.
+
+The goal is to make LLM assistance behave like a classroom support tool:
+
+- students ask for a small hint about their own micro:bit code
+- the model runs locally by default through Ollama, so the normal path does not depend on paid cloud AI
+- the response is short, age-appropriate, and framed as one next step rather than a finished solution
+- the teacher stays in the loop, can edit or reject the hint, and can step in directly when needed
+- every request is saved as a simple JSON record so the class workflow is inspectable
+
+This follows the same pattern as the GB Studio and Minecraft MCP work: expose a narrow local tool surface, keep state on disk, prefer stable workflows over raw chat output, and let an agent help with a real creative or educational task without becoming the unchecked source of truth.
+
 ## Workflow
 
 ```
@@ -16,6 +30,44 @@ Teacher reviews → edits → approves / redirects
         ↓
 Student's browser shows the approved hint
 ```
+
+## Architecture
+
+```mermaid
+flowchart LR
+  student["Student browser<br/>/"] --> submit["submit_help<br/>code + question + help type"]
+  submit --> store["Request store<br/>out/requests/*.json"]
+  submit --> llm["Hint worker<br/>language detection + prompt"]
+  llm --> provider{"LLM provider"}
+  provider --> ollama["Ollama local model<br/>default classroom path"]
+  provider --> anthropic["Anthropic<br/>optional online path"]
+  ollama --> draft["Draft hint<br/>3-5 short sentences"]
+  anthropic --> draft
+  draft --> flagged{"Flagged?"}
+  flagged -->|yes| review["Teacher dashboard<br/>/teacher"]
+  flagged -->|no and AUTO_APPROVE=true| approved["Approved response"]
+  flagged -->|no and AUTO_APPROVE=false| review
+  review --> decision{"Teacher decision"}
+  decision -->|edit + approve| approved
+  decision -->|redirect| direct["Teacher helps in person"]
+  approved --> response["get_response"]
+  direct --> response
+  response --> student
+```
+
+The important design choice is the review gate. The LLM drafts a hint, but the teacher owns what reaches the student unless `AUTO_APPROVE` is deliberately enabled for testing or a trusted small-group setup.
+
+`server.js` contains four deliberately small layers:
+
+- HTTP UI: student page, teacher dashboard, `/health`, and `/run`
+- request persistence: one JSON file per help request under `out/requests/`
+- LLM worker: asynchronous prompt generation with JavaScript/MakeCode vs MicroPython detection
+- review workflow: teacher approval, redirect, or optional auto-approval for non-flagged hints
+
+The classroom flow is local-first. The student and teacher browsers talk to the same local server, the default model call goes to Ollama on `127.0.0.1:11434`, and the saved request files provide a simple audit trail of what happened.
+
+Compared with an open chat window, this is intentionally constrained. It asks for one hint, keeps the teacher visible, stores the interaction, and keeps the assistance tied to the student's submitted code rather than encouraging a full generated answer.
+
 <img width="784" height="780" alt="Screenshot 2026-05-31 162428" src="https://github.com/user-attachments/assets/21f98898-8574-4d10-9dc6-00da3256b07d" />
 <img width="1556" height="632" alt="Screenshot 2026-05-31 162523" src="https://github.com/user-attachments/assets/24c6fcd2-53fb-46c5-b453-68419bcc0585" />
 <img width="899" height="481" alt="Screenshot 2026-05-31 162622" src="https://github.com/user-attachments/assets/a92c939f-e277-4c38-a538-d22f96106555" />
