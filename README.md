@@ -80,6 +80,18 @@ The classroom flow is local-first. The student and teacher browsers talk to the 
 
 Compared with an open chat window, this is intentionally constrained. It asks for one hint, keeps the teacher visible, stores the interaction, and keeps the assistance tied to the student's submitted code rather than encouraging a full generated answer.
 
+## Blocks And IDE Direction
+
+The UI supports both code and a small Blockly surface for MakeCode-style micro:bit JavaScript. Students can paste code, render common patterns as blocks, or build a small block sketch and turn it back into code before asking for help. Teachers see the submitted code and a read-only block preview, so the same request can be reviewed in the representation a learner understands.
+
+This is deliberately a small local prototype rather than a full MakeCode fork. The intended contribution path is:
+
+- prove the classroom flow outside the main editor first
+- keep the help protocol simple: code, blocks/code representation, question, draft hint, teacher decision
+- reuse Blockly concepts that map naturally to MakeCode blocks
+- keep the LLM behind a review gate so it acts like assisted feedback, not an unchecked code generator
+- later move the same flow into the micro:bit editor, or ship a standalone fork for schools that want local Ollama and teacher review built in
+
 <img width="784" height="780" alt="Screenshot 2026-05-31 162428" src="https://github.com/user-attachments/assets/21f98898-8574-4d10-9dc6-00da3256b07d" />
 <img width="1556" height="632" alt="Screenshot 2026-05-31 162523" src="https://github.com/user-attachments/assets/24c6fcd2-53fb-46c5-b453-68419bcc0585" />
 <img width="899" height="481" alt="Screenshot 2026-05-31 162622" src="https://github.com/user-attachments/assets/a92c939f-e277-4c38-a538-d22f96106555" />

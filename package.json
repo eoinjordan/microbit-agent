@@ -9,6 +9,18 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["microbit", "education", "mcp", "kids", "coding"],
-  "license": "MIT"
+  "keywords": [
+    "microbit",
+    "education",
+    "mcp",
+    "kids",
+    "coding"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "blockly": "^12.5.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
 }

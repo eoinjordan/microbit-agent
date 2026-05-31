@@ -64,6 +64,25 @@ function sendHtml(res, html) {
   res.end(buf);
 }
 
+function sendStaticFile(res, filePath) {
+  const contentTypes = {
+    ".js": "application/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav"
+  };
+  const ext = path.extname(filePath).toLowerCase();
+  const body = fs.readFileSync(filePath);
+  res.writeHead(200, {
+    ...corsHeaders(),
+    "content-type": contentTypes[ext] || "application/octet-stream",
+    "content-length": body.length
+  });
+  res.end(body);
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -399,6 +418,10 @@ const STUDENT_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>micro:bit Help Desk</title>
+  <script src="/vendor/blockly/blockly_compressed.js"></script>
+  <script src="/vendor/blockly/blocks_compressed.js"></script>
+  <script src="/vendor/blockly/javascript_compressed.js"></script>
+  <script src="/vendor/blockly/msg/en.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,sans-serif;background:#f0f4ff;color:#1a1a2e;min-height:100vh;padding:1rem}
@@ -412,6 +435,13 @@ const STUDENT_HTML = `<!DOCTYPE html>
     input,select,textarea{width:100%;padding:.7rem;border:2px solid #ddd;border-radius:8px;font-size:1rem;font-family:inherit}
     input:focus,textarea:focus{outline:none;border-color:#5c2d91}
     textarea.code{font-family:'Courier New',monospace;font-size:.88rem;background:#1a1a2e;color:#a8ff78;border-color:#1a1a2e;resize:vertical}
+    .editor-tabs{display:flex;gap:.5rem;margin:.5rem 0 .7rem}
+    .tab-btn{border:2px solid #ddd;background:#fff;border-radius:999px;padding:.45rem .9rem;font-weight:700;cursor:pointer}
+    .tab-btn.active{border-color:#5c2d91;background:#f5f0ff;color:#5c2d91}
+    #blocklyPane{height:360px;border:2px solid #ddd;border-radius:10px;overflow:hidden;background:#fff}
+    .code-tools{display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem}
+    .mini-btn{border:0;border-radius:7px;background:#eee;color:#333;padding:.45rem .7rem;font-weight:700;cursor:pointer}
+    .mini-btn:hover{background:#ddd}
     .btn{display:block;width:100%;padding:1rem;border:none;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;margin-top:1.5rem;transition:background .15s}
     .btn-primary{background:#5c2d91;color:white}
     .btn-primary:hover{background:#7b3fbd}
@@ -430,6 +460,9 @@ const STUDENT_HTML = `<!DOCTYPE html>
     .badge-check{background:#dbeafe;color:#1e40af}
     .badge-ready{background:#d1fae5;color:#065f46}
     .response-box{background:#f0fdf4;border:2px solid #10b981;border-radius:10px;padding:1.2rem;margin-top:1rem;line-height:1.6;white-space:pre-wrap}
+    .response-box pre{background:#102033;color:#d9fff0;border-radius:8px;padding:1rem;overflow:auto;white-space:pre;font-size:.86rem;margin:.7rem 0}
+    .response-box code{font-family:'Courier New',monospace}
+    .copy-code{float:right;border:0;border-radius:6px;background:#d1fae5;color:#065f46;padding:.3rem .55rem;font-weight:700;cursor:pointer}
     .spinner{display:inline-block;width:1rem;height:1rem;border:2px solid #ddd;border-top-color:#5c2d91;border-radius:50%;animation:spin .8s linear infinite;margin-right:.5rem;vertical-align:middle}
     @keyframes spin{to{transform:rotate(360deg)}}
     .small{font-size:.85rem;color:#666}
@@ -467,7 +500,23 @@ const STUDENT_HTML = `<!DOCTYPE html>
       <textarea id="question" rows="3" placeholder="e.g. My LED display shows nothing when I press button A" maxlength="500"></textarea>
 
       <label>Paste your micro:bit code here</label>
-      <textarea id="code" class="code" rows="15" placeholder="from microbit import *&#10;&#10;# paste your code here..."></textarea>
+      <div class="editor-tabs">
+        <button class="tab-btn active" id="tab-code" onclick="showEditor('code')">Code</button>
+        <button class="tab-btn" id="tab-blocks" onclick="showEditor('blocks')">Blocks</button>
+      </div>
+      <div id="codePane">
+        <textarea id="code" class="code" rows="15" placeholder="from microbit import *&#10;&#10;# paste your code here..."></textarea>
+        <div class="code-tools">
+          <button class="mini-btn" onclick="formatCode()">Format code</button>
+          <button class="mini-btn" onclick="loadBlocksFromCode()">Render as blocks</button>
+        </div>
+      </div>
+      <div id="blocksPane" class="hidden">
+        <div id="blocklyPane"></div>
+        <div class="code-tools">
+          <button class="mini-btn" onclick="syncCodeFromBlocks()">Use blocks as code</button>
+        </div>
+      </div>
 
       <button class="btn btn-primary" onclick="submitHelp()">Ask for a Hint 🙋</button>
     </div>
@@ -493,6 +542,8 @@ const STUDENT_HTML = `<!DOCTYPE html>
 let currentId = null;
 let pollTimer = null;
 let helpType = 'debug';
+let editorMode = 'code';
+let blocklyWorkspace = null;
 
 function selectHT(type) {
   helpType = type;
@@ -500,7 +551,192 @@ function selectHT(type) {
   document.getElementById('btn-extend').classList.toggle('selected', type === 'extend');
 }
 
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showEditor(mode) {
+  editorMode = mode;
+  document.getElementById('tab-code').classList.toggle('active', mode === 'code');
+  document.getElementById('tab-blocks').classList.toggle('active', mode === 'blocks');
+  document.getElementById('codePane').classList.toggle('hidden', mode !== 'code');
+  document.getElementById('blocksPane').classList.toggle('hidden', mode !== 'blocks');
+  if (mode === 'blocks') {
+    ensureBlockly();
+    setTimeout(function(){ if (window.Blockly && blocklyWorkspace) Blockly.svgResize(blocklyWorkspace); }, 50);
+  }
+}
+
+function defineMicrobitBlocks() {
+  if (!window.Blockly || Blockly.Blocks.mb_show_string) return;
+  Blockly.defineBlocksWithJsonArray([
+    {"type":"mb_basic_forever","message0":"forever %1 do %2","args0":[{"type":"input_dummy"},{"type":"input_statement","name":"DO"}],"colour":210},
+    {"type":"mb_show_string","message0":"show string %1","args0":[{"type":"input_value","name":"TEXT"}],"previousStatement":null,"nextStatement":null,"colour":260},
+    {"type":"mb_pause","message0":"pause ms %1","args0":[{"type":"input_value","name":"MS"}],"previousStatement":null,"nextStatement":null,"colour":160},
+    {"type":"mb_led_plot","message0":"plot LED x %1 y %2","args0":[{"type":"field_number","name":"X","value":2,"min":0,"max":4},{"type":"field_number","name":"Y","value":2,"min":0,"max":4}],"previousStatement":null,"nextStatement":null,"colour":20},
+    {"type":"mb_button_a","message0":"on button A pressed %1 do %2","args0":[{"type":"input_dummy"},{"type":"input_statement","name":"DO"}],"colour":330}
+  ]);
+}
+
+function ensureBlockly() {
+  if (!window.Blockly) {
+    alert('Blockly could not load. Check that /vendor/blockly is being served.');
+    return false;
+  }
+  defineMicrobitBlocks();
+  if (!blocklyWorkspace) {
+    const toolbox = '<xml>'
+      + '<category name="micro:bit">'
+      + '<block type="mb_basic_forever"></block>'
+      + '<block type="mb_show_string"><value name="TEXT"><block type="text"><field name="TEXT">Hello</field></block></value></block>'
+      + '<block type="mb_pause"><value name="MS"><block type="math_number"><field name="NUM">500</field></block></value></block>'
+      + '<block type="mb_led_plot"></block>'
+      + '<block type="mb_button_a"></block>'
+      + '</category>'
+      + '<category name="Values"><block type="text"></block><block type="math_number"></block></category>'
+      + '</xml>';
+    blocklyWorkspace = Blockly.inject('blocklyPane', { toolbox: toolbox, scrollbars: true, trashcan: true });
+  }
+  return true;
+}
+
+function valueCode(block, inputName, fallback) {
+  const child = block.getInputTargetBlock(inputName);
+  if (!child) return fallback;
+  if (child.type === 'text') return JSON.stringify(child.getFieldValue('TEXT') || '');
+  if (child.type === 'math_number') return String(Number(child.getFieldValue('NUM') || 0));
+  return fallback;
+}
+
+function statementCode(firstBlock, indent) {
+  const lines = [];
+  let block = firstBlock;
+  while (block) {
+    const line = blockCode(block, indent);
+    if (line) lines.push(line);
+    block = block.getNextBlock();
+  }
+  return lines.join('\\n');
+}
+
+function blockCode(block, indent) {
+  const pad = ' '.repeat(indent || 0);
+  if (block.type === 'mb_show_string') return pad + 'basic.showString(' + valueCode(block, 'TEXT', '""') + ')';
+  if (block.type === 'mb_pause') return pad + 'basic.pause(' + valueCode(block, 'MS', '500') + ')';
+  if (block.type === 'mb_led_plot') return pad + 'led.plot(' + block.getFieldValue('X') + ', ' + block.getFieldValue('Y') + ')';
+  if (block.type === 'mb_basic_forever') {
+    const body = statementCode(block.getInputTargetBlock('DO'), (indent || 0) + 4) || ' '.repeat((indent || 0) + 4) + '// add blocks here';
+    return pad + 'basic.forever(function () {\\n' + body + '\\n' + pad + '})';
+  }
+  if (block.type === 'mb_button_a') {
+    const body = statementCode(block.getInputTargetBlock('DO'), (indent || 0) + 4) || ' '.repeat((indent || 0) + 4) + '// add blocks here';
+    return pad + 'input.onButtonPressed(Button.A, function () {\\n' + body + '\\n' + pad + '})';
+  }
+  return '';
+}
+
+function syncCodeFromBlocks() {
+  if (!ensureBlockly()) return;
+  const top = blocklyWorkspace.getTopBlocks(true);
+  const code = top.map(function(block){ return blockCode(block, 0); }).filter(Boolean).join('\\n');
+  document.getElementById('code').value = code;
+  showEditor('code');
+}
+
+function makeTextBlock(text) {
+  const b = blocklyWorkspace.newBlock('text');
+  b.setFieldValue(text || '', 'TEXT');
+  b.initSvg();
+  b.render();
+  return b;
+}
+
+function makeNumberBlock(n) {
+  const b = blocklyWorkspace.newBlock('math_number');
+  b.setFieldValue(String(n || 0), 'NUM');
+  b.initSvg();
+  b.render();
+  return b;
+}
+
+function appendStatement(parent, inputName, block, previous) {
+  if (previous) previous.nextConnection.connect(block.previousConnection);
+  else parent.getInput(inputName).connection.connect(block.previousConnection);
+  return block;
+}
+
+function loadBlocksFromCode() {
+  if (!ensureBlockly()) return;
+  const code = document.getElementById('code').value;
+  blocklyWorkspace.clear();
+  const targetParent = /basic\\.forever\\s*\\(/.test(code)
+    ? blocklyWorkspace.newBlock('mb_basic_forever')
+    : blocklyWorkspace.newBlock('mb_button_a');
+  targetParent.initSvg();
+  targetParent.render();
+  let previous = null;
+  const showMatch = code.match(/basic\\.showString\\((["'])(.*?)\\1\\)/);
+  if (showMatch) {
+    const b = blocklyWorkspace.newBlock('mb_show_string');
+    b.initSvg();
+    b.getInput('TEXT').connection.connect(makeTextBlock(showMatch[2]).outputConnection);
+    b.render();
+    previous = appendStatement(targetParent, 'DO', b, previous);
+  }
+  const plotMatch = code.match(/led\\.plot\\((\\d+)\\s*,\\s*(\\d+)\\)/);
+  if (plotMatch) {
+    const b = blocklyWorkspace.newBlock('mb_led_plot');
+    b.setFieldValue(plotMatch[1], 'X');
+    b.setFieldValue(plotMatch[2], 'Y');
+    b.initSvg();
+    b.render();
+    previous = appendStatement(targetParent, 'DO', b, previous);
+  }
+  const pauseMatch = code.match(/basic\\.pause\\((\\d+)\\)/);
+  if (pauseMatch) {
+    const b = blocklyWorkspace.newBlock('mb_pause');
+    b.initSvg();
+    b.getInput('MS').connection.connect(makeNumberBlock(Number(pauseMatch[1])).outputConnection);
+    b.render();
+    previous = appendStatement(targetParent, 'DO', b, previous);
+  }
+  if (!previous) {
+    const b = blocklyWorkspace.newBlock('mb_show_string');
+    b.initSvg();
+    b.getInput('TEXT').connection.connect(makeTextBlock('Hello').outputConnection);
+    b.render();
+    appendStatement(targetParent, 'DO', b, null);
+  }
+  targetParent.moveBy(30, 30);
+  showEditor('blocks');
+}
+
+function formatCode() {
+  const codeEl = document.getElementById('code');
+  codeEl.value = codeEl.value
+    .replace(/\\r\\n/g, '\\n')
+    .replace(/\\{\\s*/g, '{\\n    ')
+    .replace(/;\\s*/g, '\\n')
+    .replace(/\\s*\\}\\)/g, '\\n})')
+    .trim();
+}
+
+function renderResponseHtml(text) {
+  const escaped = escapeHtml(text || '');
+  const codeFence = new RegExp('\\\\x60\\\\x60\\\\x60(\\\\w+)?\\\\n([\\\\s\\\\S]*?)\\\\x60\\\\x60\\\\x60', 'g');
+  const withBlocks = escaped.replace(codeFence, function(_, lang, code) {
+    return '<pre><button class="copy-code" onclick="copyCode(this)">Copy</button><code data-lang="' + escapeHtml(lang || '') + '">' + code.trim() + '</code></pre>';
+  });
+  return withBlocks.replace(/\\n/g, '<br>');
+}
+
+function copyCode(btn) {
+  const code = btn.parentElement.querySelector('code').textContent;
+  navigator.clipboard.writeText(code).catch(function(){});
+}
+
 async function submitHelp() {
+  if (editorMode === 'blocks') syncCodeFromBlocks();
   const studentName = document.getElementById('studentName').value.trim();
   const question = document.getElementById('question').value.trim();
   const code = document.getElementById('code').value.trim();
@@ -545,7 +781,7 @@ function updateDisplay(status, response) {
   msg.innerHTML = s.m;
   if ((status === 'approved' || status === 'rejected') && response) {
     responseBox.classList.remove('hidden');
-    responseBox.textContent = response;
+    responseBox.innerHTML = renderResponseHtml(response);
     stopPolling();
   }
   if (status === 'llm_error') stopPolling();
@@ -590,6 +826,10 @@ const TEACHER_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/vendor/blockly/blockly_compressed.js"></script>
+  <script src="/vendor/blockly/blocks_compressed.js"></script>
+  <script src="/vendor/blockly/javascript_compressed.js"></script>
+  <script src="/vendor/blockly/msg/en.js"></script>
   <title>Teacher Dashboard — micro:bit Help</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -628,6 +868,10 @@ const TEACHER_HTML = `<!DOCTYPE html>
     .slabel{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin:1rem 0 .4rem}
     .q-text{background:#f8f9fa;border-radius:8px;padding:.8rem;font-size:.95rem;line-height:1.5}
     pre.code{background:#1a1a2e;color:#a8ff78;border-radius:8px;padding:1rem;font-size:.82rem;overflow:auto;line-height:1.5;max-height:280px;white-space:pre}
+    .teacher-blocks{height:260px;border:2px solid #ddd;border-radius:8px;overflow:hidden;background:#fff}
+    .rich-response pre{background:#102033;color:#d9fff0;border-radius:8px;padding:1rem;overflow:auto;white-space:pre;font-size:.86rem;margin:.7rem 0}
+    .rich-response code{font-family:'Courier New',monospace}
+    .copy-code{float:right;border:0;border-radius:6px;background:#d1fae5;color:#065f46;padding:.3rem .55rem;font-weight:700;cursor:pointer}
     textarea.sugg{width:100%;border:2px solid #ddd;border-radius:8px;padding:.8rem;font-family:inherit;font-size:.95rem;line-height:1.6;resize:vertical;min-height:110px}
     textarea.sugg:focus{outline:none;border-color:#5c2d91}
     .note-input{width:100%;border:2px solid #ddd;border-radius:8px;padding:.7rem;font-family:inherit;font-size:.9rem}
@@ -696,6 +940,92 @@ function fmt(iso) {
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+function renderRichResponse(text) {
+  const escaped = esc(text || '');
+  const codeFence = new RegExp('\\\\x60\\\\x60\\\\x60(\\\\w+)?\\\\n([\\\\s\\\\S]*?)\\\\x60\\\\x60\\\\x60', 'g');
+  const withBlocks = escaped.replace(codeFence, function(_, lang, code) {
+    return '<pre><button class="copy-code" onclick="copyCode(this)">Copy</button><code data-lang="' + esc(lang || '') + '">' + code.trim() + '</code></pre>';
+  });
+  return withBlocks.replace(/\\n/g, '<br>');
+}
+
+function copyCode(btn) {
+  const code = btn.parentElement.querySelector('code').textContent;
+  navigator.clipboard.writeText(code).catch(function(){});
+}
+
+function defineTeacherBlocks() {
+  if (!window.Blockly || Blockly.Blocks.mb_show_string) return;
+  Blockly.defineBlocksWithJsonArray([
+    {"type":"mb_basic_forever","message0":"forever %1 do %2","args0":[{"type":"input_dummy"},{"type":"input_statement","name":"DO"}],"colour":210},
+    {"type":"mb_show_string","message0":"show string %1","args0":[{"type":"input_value","name":"TEXT"}],"previousStatement":null,"nextStatement":null,"colour":260},
+    {"type":"mb_pause","message0":"pause ms %1","args0":[{"type":"input_value","name":"MS"}],"previousStatement":null,"nextStatement":null,"colour":160},
+    {"type":"mb_led_plot","message0":"plot LED x %1 y %2","args0":[{"type":"field_number","name":"X","value":2,"min":0,"max":4},{"type":"field_number","name":"Y","value":2,"min":0,"max":4}],"previousStatement":null,"nextStatement":null,"colour":20},
+    {"type":"mb_button_a","message0":"on button A pressed %1 do %2","args0":[{"type":"input_dummy"},{"type":"input_statement","name":"DO"}],"colour":330}
+  ]);
+}
+
+function teacherTextBlock(ws, text) {
+  const b = ws.newBlock('text');
+  b.setFieldValue(text || '', 'TEXT');
+  b.initSvg();
+  b.render();
+  return b;
+}
+
+function teacherNumberBlock(ws, n) {
+  const b = ws.newBlock('math_number');
+  b.setFieldValue(String(n || 0), 'NUM');
+  b.initSvg();
+  b.render();
+  return b;
+}
+
+function teacherAppend(parent, inputName, block, previous) {
+  if (previous) previous.nextConnection.connect(block.previousConnection);
+  else parent.getInput(inputName).connection.connect(block.previousConnection);
+  return block;
+}
+
+function renderReadonlyBlocks(id, code) {
+  const target = document.getElementById('blocks-' + id);
+  if (!target || !window.Blockly) return;
+  defineTeacherBlocks();
+  target.innerHTML = '';
+  const ws = Blockly.inject(target, { readOnly: true, scrollbars: true });
+  const parent = /basic\\.forever\\s*\\(/.test(code) ? ws.newBlock('mb_basic_forever') : ws.newBlock('mb_button_a');
+  parent.initSvg();
+  parent.render();
+  let previous = null;
+  const showMatch = String(code || '').match(/basic\\.showString\\((["'])(.*?)\\1\\)/);
+  if (showMatch) {
+    const b = ws.newBlock('mb_show_string');
+    b.initSvg();
+    b.getInput('TEXT').connection.connect(teacherTextBlock(ws, showMatch[2]).outputConnection);
+    b.render();
+    previous = teacherAppend(parent, 'DO', b, previous);
+  }
+  const plotMatch = String(code || '').match(/led\\.plot\\((\\d+)\\s*,\\s*(\\d+)\\)/);
+  if (plotMatch) {
+    const b = ws.newBlock('mb_led_plot');
+    b.setFieldValue(plotMatch[1], 'X');
+    b.setFieldValue(plotMatch[2], 'Y');
+    b.initSvg();
+    b.render();
+    previous = teacherAppend(parent, 'DO', b, previous);
+  }
+  const pauseMatch = String(code || '').match(/basic\\.pause\\((\\d+)\\)/);
+  if (pauseMatch) {
+    const b = ws.newBlock('mb_pause');
+    b.initSvg();
+    b.getInput('MS').connection.connect(teacherNumberBlock(ws, Number(pauseMatch[1])).outputConnection);
+    b.render();
+    previous = teacherAppend(parent, 'DO', b, previous);
+  }
+  parent.moveBy(24, 24);
+  Blockly.svgResize(ws);
+}
+
 function statusBadge(status) {
   const m = {
     queued:['bd-pend','Waiting...'],
@@ -722,7 +1052,7 @@ function render() {
     const htBadge = '<span class="badge bd-'+(r.helpType||'debug')+'">'+(r.helpType==='extend'?'✨ Extend':'🐛 Fix bug')+'</span>';
     const body = isOpen ? '<div class="card-body" id="b-'+r.id+'"><em style="color:#888">Loading...</em></div>' : '';
     return '<div class="req-card st-'+r.status+(r.flagged?' flagged':'')+'" id="c-'+r.id+'">'
-      + '<div class="card-hdr'+(isOpen?' open':'')+'" onclick="toggle(\''+r.id+'\')">'
+      + '<div class="card-hdr'+(isOpen?' open':'')+'" onclick="toggle(&quot;'+r.id+'&quot;)">'
       + '<span class="sname">'+esc(r.studentName)+'</span>'
       + htBadge + statusBadge(r.status) + flagBadge
       + '<span class="time-str">'+fmt(r.submittedAt)+'</span>'
@@ -767,6 +1097,7 @@ async function loadBody(id) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
     b.innerHTML = bodyHtml(data.request);
+    setTimeout(() => renderReadonlyBlocks(data.request.id, data.request.code), 30);
   } catch(e) {
     b.innerHTML = '<div class="err-box">'+esc(e.message)+'</div>';
   }
@@ -776,7 +1107,8 @@ function bodyHtml(r) {
   const canReview = r.status==='pending_review'||r.status==='llm_error';
   const isDone = r.status==='approved'||r.status==='rejected';
   let h = '<div class="slabel">Question</div><div class="q-text">'+esc(r.question)+'</div>'
-         +'<div class="slabel">Code</div><pre class="code">'+esc(r.code)+'</pre>';
+         +'<div class="slabel">Code</div><pre class="code">'+esc(r.code)+'</pre>'
+         +'<div class="slabel">Blocks preview</div><div class="teacher-blocks" id="blocks-'+r.id+'"></div>';
   if (r.llmError) {
     h += '<div class="slabel">Hint Generation Error</div><div class="err-box">'+esc(r.llmError)+'</div>';
   }
@@ -786,13 +1118,13 @@ function bodyHtml(r) {
        + '<div class="slabel">Teacher note (private, not shown to student)</div>'
        + '<input class="note-input" type="text" id="n-'+r.id+'" placeholder="optional note to yourself">'
        + '<div class="action-row">'
-       + '<button class="btn-approve" onclick="review(\''+r.id+'\',\'approve\')">✓ Approve &amp; Send</button>'
-       + '<button class="btn-reject" onclick="review(\''+r.id+'\',\'reject\')">→ I\'ll help them myself</button>'
+       + '<button class="btn-approve" onclick="review(&quot;'+r.id+'&quot;,&quot;approve&quot;)">✓ Approve &amp; Send</button>'
+       + '<button class="btn-reject" onclick="review(&quot;'+r.id+'&quot;,&quot;reject&quot;)">→ I\\'ll help them myself</button>'
        + '</div>';
   }
   if (isDone) {
     h += '<div class="slabel">Response sent to student</div>'
-       + '<div class="final-box">'+esc(r.finalResponse||'')+'</div>'
+       + '<div class="final-box rich-response">'+renderRichResponse(r.finalResponse||'')+'</div>'
        + (r.status==='approved'
          ? '<div class="done-banner">✓ Hint was sent to student</div>'
          : '<div class="rejected-banner">→ Student has been redirected to you</div>');
@@ -841,6 +1173,19 @@ function createServer() {
 
       if (req.method === "GET" && url.pathname === "/") {
         sendHtml(res, STUDENT_HTML);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname.startsWith("/vendor/blockly/")) {
+        const relativePath = decodeURIComponent(url.pathname.replace("/vendor/blockly/", ""));
+        const blocklyRoot = path.join(__dirname, "node_modules", "blockly");
+        const blocklyRootResolved = path.resolve(blocklyRoot);
+        const filePath = path.resolve(blocklyRoot, relativePath);
+        if (!filePath.startsWith(blocklyRootResolved + path.sep) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          sendJson(res, 404, { ok: false, error: "not found" });
+          return;
+        }
+        sendStaticFile(res, filePath);
         return;
       }
 
