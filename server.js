@@ -1189,6 +1189,19 @@ function createServer() {
         return;
       }
 
+      if (req.method === "GET" && url.pathname.startsWith("/integrations/")) {
+        const relativePath = decodeURIComponent(url.pathname.replace("/integrations/", ""));
+        const integrationsRoot = path.join(__dirname, "integrations");
+        const integrationsRootResolved = path.resolve(integrationsRoot);
+        const filePath = path.resolve(integrationsRoot, relativePath);
+        if (!filePath.startsWith(integrationsRootResolved + path.sep) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          sendJson(res, 404, { ok: false, error: "not found" });
+          return;
+        }
+        sendStaticFile(res, filePath);
+        return;
+      }
+
       if (req.method === "GET" && url.pathname === "/teacher") {
         sendHtml(res, TEACHER_HTML);
         return;

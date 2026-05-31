@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>micro:bit Agent Help Desk Bridge</title>
+  <script src="./microbit-agent-bridge.js"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:0;background:#f6f7fb;color:#161625}
+    main{max-width:760px;margin:0 auto;padding:24px}
+    label{display:block;font-weight:700;margin:16px 0 6px}
+    input,select,textarea{width:100%;box-sizing:border-box;border:2px solid #d7d9e2;border-radius:8px;padding:10px;font:inherit}
+    textarea.code{font-family:Consolas,monospace;background:#101827;color:#c8facc;min-height:180px}
+    button{margin-top:16px;border:0;border-radius:8px;background:#1864ab;color:white;padding:12px 16px;font-weight:800;cursor:pointer}
+    pre{background:#101827;color:#c8facc;border-radius:8px;padding:14px;overflow:auto;white-space:pre-wrap}
+    .row{display:grid;grid-template-columns:1fr 160px;gap:12px}
+  </style>
+</head>
+<body>
+<main>
+  <h1>micro:bit Agent Help Desk Bridge</h1>
+  <div class="row">
+    <div>
+      <label for="studentName">Student name</label>
+      <input id="studentName" value="Student">
+    </div>
+    <div>
+      <label for="helpType">Help type</label>
+      <select id="helpType">
+        <option value="debug">Debug</option>
+        <option value="extend">Extend</option>
+      </select>
+    </div>
+  </div>
+  <label for="question">Question</label>
+  <textarea id="question" rows="3">Why is my LED display not showing?</textarea>
+  <label for="code">Current MakeCode JavaScript</label>
+  <textarea id="code" class="code">basic.forever(function () {
+    led.plot(2, 2)
+})</textarea>
+  <button id="send">Ask teacher</button>
+  <label for="output">Status</label>
+  <pre id="output">Ready.</pre>
+</main>
+<script>
+const output = document.getElementById("output");
+document.getElementById("send").onclick = async function () {
+  const client = new MicrobitAgentBridge({
+    studentName: document.getElementById("studentName").value.trim() || "Student"
+  });
+  output.textContent = "Submitting request...";
+  try {
+    const submitted = await client.submit({
+      question: document.getElementById("question").value.trim(),
+      code: document.getElementById("code").value,
+      helpType: document.getElementById("helpType").value,
+      language: "javascript"
+    });
+    output.textContent = "Request " + submitted.id + " submitted. Waiting for teacher-reviewed response...";
+    const final = await client.waitForResponse(submitted.id);
+    output.textContent = JSON.stringify(final, null, 2);
+  } catch (err) {
+    output.textContent = "Error: " + (err && err.message ? err.message : String(err));
+  }
+};
+</script>
+</body>
+</html>

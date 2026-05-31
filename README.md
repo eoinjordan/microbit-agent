@@ -90,6 +90,8 @@ The open-source editor to adapt is Microsoft MakeCode for micro:bit:
 - public fork branch: https://github.com/eoinjordan/pxt-microbit/tree/human-in-loop-agent-helpdesk
 - local fork sketch in this workspace: `../pxt-microbit-agent-fork`
 - integration branch: `human-in-loop-agent-helpdesk`
+- full in-repo integration example: [`integrations/makecode-helpdesk`](integrations/makecode-helpdesk)
+- local bridge panel when this server is running: `http://localhost:3097/integrations/makecode-helpdesk/panel.html`
 
 This is deliberately a small local prototype rather than a full MakeCode fork. The intended contribution path is:
 
