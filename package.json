@@ -1,0 +1,14 @@
+{
+  "name": "microbit-agent",
+  "version": "0.1.0",
+  "description": "Human-in-the-loop help desk for kids working on micro:bit projects",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["microbit", "education", "mcp", "kids", "coding"],
+  "license": "MIT"
+}

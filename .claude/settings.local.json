@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\Users\\\\Eoin\\\\git\\\\microbit-agent; $env:PORT=\"3097\"; Start-Process -FilePath \"node\" -ArgumentList \"server.js\" -PassThru | ForEach-Object { $_.Id }; Start-Sleep -Seconds 2; Invoke-WebRequest -Uri \"http://127.0.0.1:3097/health\" -UseBasicParsing | Select-Object -ExpandProperty Content)"
+    ]
+  }
+}

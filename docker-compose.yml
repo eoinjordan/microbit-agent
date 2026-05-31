@@ -1,0 +1,18 @@
+services:
+  microbit-agent:
+    build: .
+    image: eoinedge/microbit-agent:latest
+    ports:
+      - "3097:3097"
+    volumes:
+      - ./out:/app/out
+    environment:
+      - PORT=3097
+      - HOST=0.0.0.0
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
+      - LLM_TIMEOUT_MS=${LLM_TIMEOUT_MS:-90000}
+    restart: unless-stopped
