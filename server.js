@@ -17,6 +17,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5-coder:7b";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 90000);
+const AUTO_APPROVE = ["1", "true", "yes", "on"].includes(String(process.env.AUTO_APPROVE || "").toLowerCase());
 
 const OUT_DIR = path.join(__dirname, "out");
 const REQUESTS_DIR = path.join(OUT_DIR, "requests");
@@ -121,7 +122,7 @@ function listAllRequests() {
 // ─── LLM integration ─────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are a friendly helper for kids learning to code with the BBC micro:bit.
-You help children aged 8-14 understand and fix their MicroPython programs.
+You help children aged 8-14 understand and fix their micro:bit programs in either MicroPython or JavaScript/MakeCode.
 
 Your rules:
 - Explain things simply, as if talking to a 10-year-old
@@ -133,8 +134,44 @@ Your rules:
 - Keep your reply to 3-5 short sentences
 - If you spot any inappropriate content in the question or code, start your reply with [FLAG] on its own line`;
 
+function detectLanguage(code = "") {
+  const s = String(code).trim().toLowerCase();
+  if (!s) return "python";
+
+  const jsSignals = [
+    "basic.",
+    "input.",
+    "led.",
+    "pins.",
+    "forever(",
+    "function (",
+    "function(",
+    "let ",
+    "const ",
+    "=>"
+  ];
+  if (jsSignals.some((x) => s.includes(x))) return "javascript";
+
+  const pySignals = [
+    "from microbit import",
+    "import microbit",
+    "while true:",
+    "def ",
+    "display.",
+    "button_a",
+    "button_b",
+    "sleep("
+  ];
+  if (pySignals.some((x) => s.includes(x))) return "python";
+
+  return "python";
+}
+
 function buildUserMessage(request) {
   const { studentName, code, question, helpType } = request;
+  const language = detectLanguage(code);
+  const fence = language === "javascript" ? "javascript" : "python";
+  const languageLabel = language === "javascript" ? "JavaScript (MakeCode style)" : "MicroPython";
   const action = helpType === "extend"
     ? "trying to add something new to"
     : "trying to fix a problem in";
@@ -142,12 +179,14 @@ function buildUserMessage(request) {
 
 They said: "${question}"
 
+Language: ${languageLabel}
+
 Their code:
-\`\`\`python
+\`\`\`${fence}
 ${code}
 \`\`\`
 
-Please give ${studentName} a helpful hint. Remember: one hint, keep it simple and encouraging!`;
+Please give ${studentName} a helpful hint. Use the same language as their code (${languageLabel}). Remember: one hint, keep it simple and encouraging!`;
 }
 
 async function callOllama(userMessage) {
@@ -220,10 +259,17 @@ function runLlmAsync(requestId) {
       if (request.status === "pending_llm") {
         request.llmSuggestion = hint.trim();
         request.flagged = hint.trimStart().startsWith("[FLAG]");
-        request.status = "pending_review";
+        if (AUTO_APPROVE && !request.flagged) {
+          request.finalResponse = request.llmSuggestion;
+          request.status = "approved";
+          request.teacherNote = "Auto-approved by server setting AUTO_APPROVE.";
+          request.reviewedAt = nowIso();
+        } else {
+          request.status = "pending_review";
+        }
         request.llmAt = nowIso();
         saveRequest(request);
-        console.log(`[llm] ${requestId}: hint ready (${hint.length} chars${request.flagged ? ", FLAGGED" : ""})`);
+        console.log(`[llm] ${requestId}: hint ready (${hint.length} chars${request.flagged ? ", FLAGGED" : ""}${AUTO_APPROVE ? ", AUTO_APPROVE_ON" : ""})`);
       }
     } catch (err) {
       console.error(`[llm] ${requestId} failed:`, err.message || err);
@@ -812,6 +858,7 @@ function createServer() {
           ollamaUrl: LLM_PROVIDER === "ollama" ? OLLAMA_URL : null,
           ollamaModel: LLM_PROVIDER === "ollama" ? OLLAMA_MODEL : null,
           anthropicModel: LLM_PROVIDER === "anthropic" ? ANTHROPIC_MODEL : null,
+          autoApprove: AUTO_APPROVE,
           pendingReview: pending,
           studentUrl: `http://${HOST}:${PORT}/`,
           teacherUrl: `http://${HOST}:${PORT}/teacher`
@@ -851,6 +898,7 @@ function main() {
     console.log(`teacher:  http://${HOST}:${PORT}/teacher`);
     console.log(`health:   http://${HOST}:${PORT}/health`);
     console.log(`llm_provider=${LLM_PROVIDER}`);
+    console.log(`auto_approve=${AUTO_APPROVE}`);
     if (LLM_PROVIDER === "ollama") {
       console.log(`ollama_url=${OLLAMA_URL}  model=${OLLAMA_MODEL}`);
     } else {

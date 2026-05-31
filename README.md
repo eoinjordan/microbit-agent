@@ -3,7 +3,7 @@
 
 Human-in-the-loop help desk for kids working on BBC micro:bit projects.
 
-Kids paste their MicroPython code and ask a question. An LLM (local Ollama by default, or Anthropic) generates a kid-friendly hint. The teacher reviews and approves the hint before the student sees it.
+Kids paste their MicroPython or JavaScript/MakeCode-style code and ask a question. An LLM (local Ollama by default, or Anthropic) generates a kid-friendly hint. The teacher reviews and approves the hint before the student sees it (or auto-approve can be enabled for faster testing).
 
 ## Workflow
 
@@ -117,3 +117,4 @@ All actions via `POST /run`:
 | `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | Anthropic model |
 | `LLM_TIMEOUT_MS` | `90000` | LLM call timeout |
+| `AUTO_APPROVE` | `false` | When `true`, non-flagged LLM hints are automatically approved and sent to students |
