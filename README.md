@@ -17,7 +17,18 @@ The goal is to make LLM assistance behave like a classroom support tool:
 - the teacher stays in the loop, can edit or reject the hint, and can step in directly when needed
 - every request is saved as a simple JSON record so the class workflow is inspectable
 
-This follows the same pattern as the GB Studio and Minecraft MCP work: expose a narrow local tool surface, keep state on disk, prefer stable workflows over raw chat output, and let an agent help with a real creative or educational task without becoming the unchecked source of truth.
+This follows the same pattern as the GB Studio, Minecraft MCP, Mindstorms, and SNES Studio work: expose a narrow local tool surface, keep state on disk, prefer stable workflows over raw chat output, and let an agent help with a real creative or educational task without becoming the unchecked source of truth.
+
+## Related Experiments
+
+This repository is one part of a broader set of experiments in useful educational agents:
+
+- `GB Studio` / `gb-studio-agent`: agent tools for inventorying and safely patching game projects instead of free-form editing
+- `minecraft-mcp`: local-first planning, state, and behavior-pack delivery so agents create repeatable world-building workflows rather than one-off chat snippets
+- `mindstorms-robot-creator` / `lego-mindstorms-mcp`: human-supervised robot building and debugging where agents propose one small test, record observations, and keep physical safety visible
+- `SNES Studio`: kid-friendly game creation where helpers propose reviewable patches, validate projects, and prepare export/build workflows without silently changing the game
+
+The shared idea is not "AI writes the project." The shared idea is that an LLM can sit behind a small, inspectable workflow that helps a learner, parent, mentor, or teacher make the next good move.
 
 ## Workflow
 
