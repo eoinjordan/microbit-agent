@@ -84,6 +84,12 @@ Compared with an open chat window, this is intentionally constrained. It asks fo
 
 The UI supports both code and a small Blockly surface for MakeCode-style micro:bit JavaScript. Students can paste code, render common patterns as blocks, or build a small block sketch and turn it back into code before asking for help. Teachers see the submitted code and a read-only block preview, so the same request can be reviewed in the representation a learner understands.
 
+The open-source editor to adapt is Microsoft MakeCode for micro:bit:
+
+- upstream target: https://github.com/microsoft/pxt-microbit
+- local fork sketch in this workspace: `../pxt-microbit-agent-fork`
+- integration branch: `human-in-loop-agent-helpdesk`
+
 This is deliberately a small local prototype rather than a full MakeCode fork. The intended contribution path is:
 
 - prove the classroom flow outside the main editor first
