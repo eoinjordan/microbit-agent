@@ -23,6 +23,7 @@ This follows the same pattern as the GB Studio, Minecraft MCP, Mindstorms, and S
 
 This repository is one part of a broader set of experiments in useful educational agents:
 
+- [`microbit-mcp`](https://github.com/eoinjordan/microbit-mcp): companion MCP server for micro:bit CODAL firmware projects, MakeCode TypeScript workflows, source read/write, validation, and build tooling
 - `GB Studio` / `gb-studio-agent`: agent tools for inventorying and safely patching game projects instead of free-form editing
 - `minecraft-mcp`: local-first planning, state, and behavior-pack delivery so agents create repeatable world-building workflows rather than one-off chat snippets
 - `mindstorms-robot-creator` / `lego-mindstorms-mcp`: human-supervised robot building and debugging where agents propose one small test, record observations, and keep physical safety visible
