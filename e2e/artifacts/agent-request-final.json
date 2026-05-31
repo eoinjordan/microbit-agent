@@ -1,0 +1,20 @@
+{
+    "ok":  true,
+    "request":  {
+                    "id":  "dd90f578-599e-49be-82b2-8fac9092f669",
+                    "studentName":  "E2EStudent",
+                    "className":  "",
+                    "code":  "from microbit import *`nwhile True:`n    if button_a.is_pressed():`n        display.show(Image.HEART)",
+                    "question":  "LED display not turning on",
+                    "helpType":  "debug",
+                    "status":  "approved",
+                    "llmSuggestion":  null,
+                    "llmAt":  null,
+                    "llmError":  "This operation was aborted",
+                    "flagged":  false,
+                    "teacherNote":  "approved from llm_error for e2e",
+                    "finalResponse":  "Check the part where button A is pressed. Add display.clear() in the else case so you can clearly see when the icon should appear.",
+                    "submittedAt":  "2026-05-31T15:52:05.590Z",
+                    "reviewedAt":  "2026-05-31T15:54:24.940Z"
+                }
+}
